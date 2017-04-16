@@ -33,40 +33,77 @@ import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener{
 
-
+    // identify login status
     public static boolean authenticated = false;
+
+    // used for an additional function which can make photo
     public static final int TAKE_PHOTO = 1;
     private Uri imageUri;
+
+
+    // the UI components
     private ImageView image;
     private Button balanceBtn;
     private Button priceBtn;
     private Button creditBtn;
     private Button infoBtn;
     private Button productBtn;
+
+    // used for store query data
     private String balance;
     private String price;
     private String credit;
     private String info;
     private String product;
     private String responseData;
+
+    // to extract json data
     private JSONObject jsonObj;
+
+    // for displaying decimal number format
     private DecimalFormat df;
-    private String TAG="MainActivity";
+
+    // an inner class for thread's lock control
     private QueueBuffer queue;
+
+    // for log
+    private String TAG="MainActivity";
+
+    /**
+     * initialize user interface and varivables, It has login process
+     *
+     * @param savedInstanceState
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        Log.d(TAG, "onCreate: start to process login");
+        // process login
         if(authenticated == false) {
+            Log.d(TAG, "onCreate: the user hasn't been authenticated and start to process login");
             loginProcess();
         }
+        Log.d(TAG, "onCreate: the user is logged");
+        // init UI
         setContentView(R.layout.activity_main);
+
+        Log.d(TAG, "onCreate: start to initialize the variables");
+        // init varibles and UI componnets
         image = (ImageView)findViewById(R.id.avatar_image);
         balanceBtn=(Button)findViewById(R.id.balanceBtn);
         priceBtn=(Button)findViewById(R.id.priceBtn);
         creditBtn=(Button)findViewById(R.id.creditBtn);
         infoBtn=(Button)findViewById(R.id.infoBtn);
         productBtn=(Button)findViewById(R.id.productBtn);
+        queue = new QueueBuffer();
+
+        Log.d(TAG, "onCreate: set up date info");
+        // set a date information in the information displaying area initially
         infoBtn.setText(DateFormat.getDateInstance().format(new Date()));
+
+        Log.d(TAG, "onCreate: set listenners");
+        // set listenners
         image.setOnClickListener(this);
         balanceBtn.setOnClickListener(this);
         priceBtn.setOnClickListener(this);
@@ -74,28 +111,49 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         infoBtn.setOnClickListener(this);
         productBtn.setOnClickListener(this);
 
+        Log.d(TAG, "onCreate: setup decimal format");
+        // keep 2 decimal format
         df = new DecimalFormat("#.00");
 
-        queue = new QueueBuffer();
+        Log.d(TAG, "onCreate: set up user name on the title bar");
+        // if the user logged in, show the user name on top
         setUsernameTitle();
     }
 
+
+    /**
+     * once the user logged, this method can query user's title, first and last names and display them on the title bar.
+     * it uses a thread the manage query delay issues, so the the program won't put any value into the field until the
+     * data is queried from the server.
+     */
     private void setUsernameTitle(){
         new Thread(new Runnable(){
             @Override
             public void run() {
                 try{
-
+                    Log.d(TAG, "run: send ACCOUNT_RUL to the server: "+HttpUtil.ACCOUNTS_URL);
+                    //send request to get the user's information
                     HttpUtil.sendOkHttpRequest(HttpUtil.ACCOUNTS_URL , new Callback(){
                         @Override
                         public void onResponse(Call call, Response response) throws IOException {
+                            Log.d(TAG, "onResponse: got Response data"+responseData);
+                            // got the response data
                             responseData = response.body().string();
 
+
                             try {
+                                Log.d(TAG, "onResponse: extract response data: "+responseData);
+                                // start to extracting response data as it's in JSON format
                                 jsonObj = new JSONObject(responseData);
+
+                                Log.d(TAG, "onResponse: get information of title, first and last name");
+                                // get the information and put them into veriables
                                 String title = jsonObj.getJSONObject("attributes").getString("title");
                                 String firstName = jsonObj.getJSONObject("attributes").getString("first-name");
                                 String lastName = jsonObj.getJSONObject("attributes").getString("last-name");
+
+                                Log.d(TAG, "onResponse: start to wait until all data are ready");
+                                // start to wait until all data are ready
                                 queue.put("Welcome Back! "+title+" "+firstName+" "+lastName);
 
 
@@ -120,14 +178,31 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }
             }
         }).start();
+        Log.d(TAG, "setUsernameTitle: put data into the title bar as it has been processed already");
+        // put data into the title bar as it has been processed already
         setTitle(queue.get());
     }
 
+    /**
+     * process all click actions, it has 6 actions totally, click image, balance botton, credit botton,
+     * price button, product name button and infomation button, and the buttons of balance, credit, price
+     * and product name are all used thread to manage query delay issue, so that the program can keep
+     * waiting until the data responsed from the server side.
+     *
+     * @param v
+     */
     @Override
     public void onClick(View v) {
+        Log.d(TAG, "onClick: process the image clicking, this is an additional function which is not required");
+        // process the image clicking, this is an additional function which is not required
         if(v.getId()==R.id.avatar_image) {
+
+            Log.d(TAG, "onClick: set a temp file to create a directory for storing image file.");
+            // set a temp file to create a directory for storing image file.
             File outputImage = new File(getExternalCacheDir(), "output_image.jpg");
 
+            Log.d(TAG, "onClick: delete the temp file, as the directory has been created");
+            // delete the temp file, as the directory has been created
             try{
                 if(outputImage.exists()){
                     outputImage.delete();
@@ -136,38 +211,59 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }catch(IOException e){
                 e.printStackTrace();
             }
+
+            Log.d(TAG, "onClick: some old version SDK has different access compare with the new SDK, we set 2 user cases");
+            // some old version SDK has different access compare with the new SDK, we set 2 user cases
             if(Build.VERSION.SDK_INT >=24){
                 imageUri = FileProvider.getUriForFile(MainActivity.this, "com.example.amaysimtest.fileprovider", outputImage);
             }else {
                 imageUri = Uri.fromFile(outputImage);
             }
 
+            Log.d(TAG, "onClick: process picture making");
+            // process picture making
             Intent intent = new Intent("android.media.action.IMAGE_CAPTURE");
             intent.putExtra(MediaStore.EXTRA_OUTPUT, imageUri);
             startActivityForResult(intent,TAKE_PHOTO);
 
         }
+
+        Log.d(TAG, "onClick: process balance button clicking with a thread");
+        // process balance button clicking with a thread
         if(v.getId()==R.id.balanceBtn){
             if(balance==null) {
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
                         try {
-
+                            Log.d(TAG, "run: send request to get the data balance information");
+                            //send request to get the data balance information
                             HttpUtil.sendOkHttpRequest(HttpUtil.SUBSCRIPTIONS_URL, new Callback() {
                                 @Override
                                 public void onResponse(Call call, Response response) throws IOException {
+                                    Log.d(TAG, "onResponse: got the response data");
+                                    // got the response data
                                     responseData = response.body().string();
 
                                     try {
+                                        Log.d(TAG, "onResponse: start to extracting response data as it's in JSON format");
+                                        // start to extracting response data as it's in JSON format
                                         jsonObj = new JSONObject(responseData);
 
+                                        Log.d(TAG, "onResponse: get the balance data from json object");
+                                        // get the balance data from json object
                                         balance = jsonObj.getJSONObject("attributes").getString("included-data-balance");
+
+                                        Log.d(TAG, "onResponse: start to process format");
+                                        // start to process format
                                         if (balance != null) {
                                             balance = df.format(Float.parseFloat(balance) / 1024) + " GB";
                                         } else {
                                             balance = "0 GB";
                                         }
+
+                                        Log.d(TAG, "onResponse: start to wait until all data are ready");
+                                        // start to wait until all data are ready
                                         queue.put(balance);
 
                                     } catch (JSONException e) {
@@ -189,13 +285,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         }
                     }
                 }).start();
+
+                Log.d(TAG, "onClick: put data into the title bar as it has been processed already");
+                // put data into the title bar as it has been processed already
                 infoBtn.setText(queue.get());
 
             }else{
+                Log.d(TAG, "onClick: if the balance already has a value, directly put into the information field.");
+                // if the balance already has a value, directly put into the information field.
                 infoBtn.setText(balance);
             }
 
         }
+
+        Log.d(TAG, "onClick: process credit button clicking with a thread, it has the same process as balance button,");
+        // process credit button clicking with a thread, it has the same process as balance button,
         if(v.getId()==R.id.creditBtn){
             if(credit==null) {
                 new Thread(new Runnable() {
@@ -238,6 +342,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
 
         }
+
+        Log.d(TAG, "onClick: process price button clicking with a thread, it has the same process as balance button,");
+        // process price button clicking with a thread, it has the same process as balance button,
         if(v.getId()==R.id.priceBtn){
             if(price==null) {
                 new Thread(new Runnable() {
@@ -286,6 +393,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         }
 
+        Log.d(TAG, "onClick: process product button clicking with a thread, it has the same process as balance button,");
+        // process product button clicking with a thread, it has the same process as balance button,
         if(v.getId()==R.id.productBtn){
             if(product==null) {
                 new Thread(new Runnable() {
@@ -324,6 +433,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         }
 
+        Log.d(TAG, "onClick: if the user presses information button, it will show an alert to show the data's catagory");
+        // if the user presses information button, it will show an alert to show the data's catagory
         if(v.getId()==R.id.infoBtn){
             if(infoBtn.getText().equals(DateFormat.getDateInstance().format(new Date()))){
                 Toast.makeText(MainActivity.this, "This is today's date", Toast.LENGTH_SHORT).show();
@@ -342,6 +453,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         }
     }
+
+    /**
+     * this is used for the additional picture making function, it processes the picture making and
+     * image setting.
+     *
+     * @param requestCode
+     * @param resultCode
+     * @param data
+     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         switch(requestCode) {
@@ -359,17 +479,32 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
+    /**
+     * open login UI to process login
+     */
     private void loginProcess(){
         Intent[] intent = {new Intent(MainActivity.this, LoginActivity.class)};
         startActivities(intent);
     }
 
+    /**
+     * create an option menu which contains logout function
+     *
+     * @param menu
+     * @return
+     */
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main,menu);
         return true;
     }
 
+    /**
+     * process item clicking action which is the logout function in the option menu
+     *
+     * @param item
+     * @return
+     */
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch(item.getItemId()){
@@ -380,22 +515,36 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         return true;
     }
 
+    /**
+     * process the logout function
+     */
     private void logoutProcess(){
         authenticated = false;
         loginProcess();
         finish();
     }
 
+    /**
+     * this is a class used for thread running, it contains get and set methods which can manage the lock
+     */
     class QueueBuffer {
+        // the value for processing
         String value;
+        // show the status wether the value has been set
         boolean valueSet = false;
 
+        /**
+         * get the value
+         *
+         * @return
+         */
         synchronized String get() {
             if (!valueSet)
                 try {
                     wait();
                 } catch (InterruptedException e) {
-                    System.out.println("InterruptedException caught");
+                    Log.d(TAG, "get: InterruptedException caught");
+
                 }
 
             Log.d(TAG, "get: "+value);
@@ -404,12 +553,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             return value;
         }
 
+        /**
+         * set the value by waiting till the value be set.
+         * @param value
+         */
         synchronized void put(String value) {
             if (valueSet)
                 try {
                     wait();
                 } catch (InterruptedException e) {
-                    System.out.println("InterruptedException caught");
+                    Log.d(TAG, "put: InterruptedException caught");
+
                 }
             this.value = value;
             valueSet = true;
